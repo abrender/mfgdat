@@ -1,0 +1,48 @@
+name: Build and Release
+
+on:
+  release:
+    types: [released]
+
+jobs:
+  build:
+    permissions:
+      # Permissions required to write upload artifacts.
+      contents: write
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [darwin, linux, windows]
+        goarch: [amd64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.1'
+      - name: Install dependencies
+        run: go get .
+
+      - name: Build
+        run: |
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o decoder-${{ matrix.goos }}-${{ matrix.goarch }}${{ (matrix.goos == 'windows') && '.exe' || '' }} .
+
+      - name: Archive
+        run: |
+          if [[ "${{ matrix.goos }}" == "linux" ]]; then
+            tar -czvf decoder-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz decoder-${{ matrix.goos }}-${{ matrix.goarch }}
+          else
+            zip decoder-${{ matrix.goos }}-${{ matrix.goarch }}.zip decoder-${{ matrix.goos }}-${{ matrix.goarch }}${{ (matrix.goos == 'windows') && '.exe' || ''}}
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: decoder-${{ matrix.goos }}-${{ matrix.goarch }}.${{ (matrix.goos == 'linux') && 'tar.gz' || 'zip' }}
+          asset_name: decoder-${{ matrix.goos }}-${{ matrix.goarch }}.${{ (matrix.goos == 'linux') && 'tar.gz' || 'zip' }}
+          asset_content_type: application/${{ (matrix.goos == 'linux') && 'x-compressed-tar' || 'zip' }}
