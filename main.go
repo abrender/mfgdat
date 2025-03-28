@@ -9,6 +9,8 @@
 package main
 
 import (
+	_ "embed"
+
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
@@ -26,47 +28,13 @@ import (
 	"time"
 )
 
-const (
-	// The root certificate used to sign the certificate presented by the ONT to the gateway.
-	attServicesRootCA = `-----BEGIN CERTIFICATE-----
-MIIDjTCCAnWgAwIBAgIQaZZlNVfAj8C+PAyFWjR9TTANBgkqhkiG9w0BAQUFADBL
-MQswCQYDVQQGEwJVUzEZMBcGA1UEChMQQVRUIFNlcnZpY2VzIEluYzEhMB8GA1UE
-AxMYQVRUIFNlcnZpY2VzIEluYyBSb290IENBMB4XDTExMDIyNDAwMDAwMFoXDTMx
-MDIyMzIzNTk1OVowSzELMAkGA1UEBhMCVVMxGTAXBgNVBAoTEEFUVCBTZXJ2aWNl
-cyBJbmMxITAfBgNVBAMTGEFUVCBTZXJ2aWNlcyBJbmMgUm9vdCBDQTCCASIwDQYJ
-KoZIhvcNAQEBBQADggEPADCCAQoCggEBAPecTeoY88yWw8n8tjxSuhNGYvTeS6/J
-vCmG5GEUwmqOrPwQp+dyuDQ6U5kXZAI43XTvEWBhqRvGk858JmvQm0fw/mj4l4fN
-KzcEUSAEyKMuYSqaNavPEFRUGMcWx+lHC1ZDgrehVhRCdvGmTkOm5FC0QU2NBXDL
-Hl9XswadhBH7KN5n673qgVaziazRt4m009wsbU2IlGq3duqReLJRmurdo1bT6AhK
-PPLCOm5c956IhVNsuKy1rclNHvqR8XQH1slzDoQ2+bBXNxZGMFgEquLaraZodsWV
-/HF9/1LOojb0BDa0nhvSCQ6vHhW1YSkkM3rLKX3ySkxyGnek4w/rOwkCAwEAAaNt
-MGswEgYDVR0TAQH/BAgwBgEB/wIBATAOBgNVHQ8BAf8EBAMCAQYwJgYDVR0RBB8w
-HaQbMBkxFzAVBgNVBAMTDk1QS0ktMjA0OC0xLTkyMB0GA1UdDgQWBBSXIJnCcypF
-6+ACf0fae6t86x+vbjANBgkqhkiG9w0BAQUFAAOCAQEAq/zvYiIjZgYvpgRL4oUi
-CaYqHWrWSYHG+k0zRGw1ysu4MxsaHY3JMQmF7E0OoBPsLuxfOvVxUCRrO0CFyBtJ
-3s49FhLtRTrQGs/7DoL+tL80pIsgH7EX9a4koD/fjuCZe1dr9JsHqI0SUblfy5CX
-s6BnhoXTJYAa47RhJwqMJ8jMRsUEKWPBDc13EGH6+w3Sw2CMvvWuriKSFicLlmLc
-OrIPBwSwELYAd82Vm7HQO2HbHO/hp+VewqZiXWErWjWr+D0ScfNR82gwkaDPwZUZ
-Tju8Z+QyAsLMtdBtFBoRtWs4kJLQWvXbILTpICxl8dYQFZ7Sv4dxdl2GdsNNtSSo
-xw==
------END CERTIFICATE-----`
+//go:embed wpa_supplicant.conf.template
+var wpaSupplicantText string
 
-	wpaSupplicantText = `eapol_version=1
-ap_scan=0
-fast_reauth=1
-openssl_ciphers=DEFAULT@SECLEVEL=0
-network={
-        ca_cert="/full/path/to/%s"
-        client_cert="/full/path/to/%s"
-        eap=TLS
-        eapol_flags=0
-        identity="%s"
-        key_mgmt=IEEE8021X
-        phase1="allow_canned_success=1 allow_unsafe_renegotiation=1"
-        private_key="/full/path/to/%s"
-}
-`
-)
+// The root certificate used to sign the certificate presented by the ONT to the gateway.
+//
+//go:embed att-services-root-ca.pem
+var attServicesRootCA string
 
 // writeTarGz writes a .tar.gz file to `w` containing a wpa_supplicant.conf file and related certificate and keys.
 func writeTarGz(s *certificate.Bundle, w io.Writer, mtime time.Time) error {

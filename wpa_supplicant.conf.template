@@ -1,0 +1,14 @@
+eapol_version=1
+ap_scan=0
+fast_reauth=1
+openssl_ciphers=DEFAULT@SECLEVEL=0
+network={
+        ca_cert="/full/path/to/%s"
+        client_cert="/full/path/to/%s"
+        eap=TLS
+        eapol_flags=0
+        identity="%s"
+        key_mgmt=IEEE8021X
+        phase1="allow_canned_success=1 allow_unsafe_renegotiation=1"
+        private_key="/full/path/to/%s"
+}
