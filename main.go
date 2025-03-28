@@ -25,11 +25,12 @@ import (
 	"path/filepath"
 	"slices"
 	"text/tabwriter"
+	"text/template"
 	"time"
 )
 
 //go:embed wpa_supplicant.conf.template
-var wpaSupplicantText string
+var wpaSupplicantTemplateText string
 
 // The root certificate used to sign the certificate presented by the ONT to the gateway.
 //
@@ -93,8 +94,23 @@ func writeTarGz(s *certificate.Bundle, w io.Writer, mtime time.Time) error {
 	files[privateKeyFilename] = bytes.Clone(buf.Bytes())
 
 	// Write the wpa_supplicant.conf output file.
-	content := fmt.Sprintf(wpaSupplicantText, caCertFilename, clientCertFilename, macAddress, privateKeyFilename)
-	files[wpaSupplicantFilename] = []byte(content)
+	buf.Reset()
+	wpaSupplicantTemplateInfo := struct {
+		ClientCertFilename, CACertFilename, PrivateKeyFilename, MACAddress string
+	}{
+		ClientCertFilename: clientCertFilename,
+		CACertFilename:     caCertFilename,
+		PrivateKeyFilename: privateKeyFilename,
+		MACAddress:         macAddress,
+	}
+	tmpl, err := template.New("wpa_supplicant").Parse(wpaSupplicantTemplateText)
+	if err != nil {
+		return fmt.Errorf("could not parse wpa_supplicant template: %v", err)
+	}
+	if err := tmpl.Execute(&buf, wpaSupplicantTemplateInfo); err != nil {
+		return fmt.Errorf("could not execute wpa_supplicant template: %v", err)
+	}
+	files[wpaSupplicantFilename] = bytes.Clone(buf.Bytes())
 
 	// Add all output files to the tar.Writer.
 	//
