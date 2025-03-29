@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# The purpose of this script is to create fake `mfg.dat` files to be used as test data for testing & verifying the
+# functionality of the code in this repo.
+
 set -e
 
 mac_address="02:01:02:03:04:05"
