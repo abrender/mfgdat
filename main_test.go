@@ -28,7 +28,7 @@ func TestRun(t *testing.T) {
 	}{
 		{
 			testName:   "bgw210-700",
-			inputFile:  "testdata/bgw210-700/mfg.dat",
+			inputFile:  "testdata/bgw210-700/mfg.dat", // Fake file created using make-fake-mfg-dat-bgw210-700.sh
 			goldenFile: "testdata/bgw210-700/123ABC-P67AB2DR253311.tar.gz",
 		},
 	}
