@@ -1,15 +1,29 @@
 # Certificate extraction tool
+The tools and information in this repository are used to extract the device certificates and key from `mfg.dat` files of
+BGW210-700 gateway devices. The certificates and key can be used to configure [EAP](https://en.wikipedia.org/wiki/Extensible_Authentication_Protocol)
+authentication between a network gateway and an AT&T ONT device.
 
 ## Instructions
-The latest Linux, Mac & Windows binaries can be found [here](https://github.com/abrender/mfgdat/releases).
+* <ins>Method #1</ins>: **Use a pre-built release binary**. Download and unzip the latest Linux, Mac or Windows binary from a release: [here](https://github.com/abrender/mfgdat/releases). 
+      Place the binary application and an `mfg.dat` file into the same folder and run the application. The application
+      will create a `.tar.gz` file containing the key, certificates and example `wpa_supplicant.conf` file.
+  * If the `mfg.dat` file is in a different directory or has a different file name then the full path to the file can be
+    passed as the first argument to the program. Example: `$ decoder-windows-amd64 path/to/my/mfg.dat`
+* <ins>Method #2</ins>: **Build & run the Go code**. Ensure that you have Go installed (https://go.dev/doc/install).
+  ```
+  git clone https://github.com/abrender/mfgdat.git
+  cd mfgdat
+  go get .
+  go run . path/to/my/mfg.dat
+  ```
+* <ins>Method #3</ins>. **Bash script**. Download and run the [parse-mfg-dat.sh](https://github.com/abrender/mfgdat/blob/main/parse-mfg-dat.sh) script from this repository.
+      The script will output the device key, certificates and MAC address to the console.
+      The [wpa_supplicant.conf.template](https://github.com/abrender/mfgdat/blob/main/wpa_supplicant.conf.template) file can be used as a template for creating your own configuration file.
+      If there are multiple CA certificates (this is likely) then they can all be appended and placed into the same file.
 
-To build & run the decoder tool, follow these steps:
-1) Install Go (https://go.dev/doc/install)
-1) Clone this repo
-2) `go run main.go </full/path/to/mfg.dat>`.  The path to `mfg.dat` is optional. If the filename is not provided then the decoder tool searches the current directory for a file named `mfg.dat`.
 
 ## Supported devices
-This code has only been tested on `mfg.dat` files from **BGW210-700** gateways.
+This code has only been tested on an `mfg.dat` file from one **BGW210-700** gateway.
 
 # `mfg.dat` Certificate storage format details
 
