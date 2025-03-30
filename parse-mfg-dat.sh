@@ -1,4 +1,13 @@
 #!/bin/bash
+# Copyright (C) 2025 Avi Brender.
+#
+# This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+# License as published by the Free Software Foundation, either version 3 of the License, or any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+
 
 # This is a quick and dirty script to parse an mfg.dat file from a BGW210-700 and print out the contents to the console.
 # It doesn't do as much sanity checking as the Go code, but it should work as long as openssl, dd and xxd are installed.
