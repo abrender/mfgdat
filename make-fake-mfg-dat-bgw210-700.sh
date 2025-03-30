@@ -60,6 +60,11 @@ total_len_bytes=$((header_len_bytes + entries_len_bytes + raw_data_len_bytes))
 # Create fake mfg.dat-fake file
 dd status=none if=/dev/zero of=mfg.dat-fake bs=256k count=1
 
+# Magic Numbers
+MAGIC="0E0C0A08"
+MAGIC+="02040607"
+echo "${MAGIC}" | xxd -r -p | dd status=none conv=notrunc of=mfg.dat-fake bs=1 count=8 seek=$((0x3C000))
+
 # Length
 printf '%08X' ${total_len_bytes} | xxd -r -p | dd status=none conv=notrunc of=mfg.dat-fake bs=1 count=4 seek=$((0x3C008))
 # Number of entries

@@ -35,22 +35,22 @@ The certificate section begins at `-0x4000` (-16,384) bytes from the end of `mfg
 ### Format
 The header and entries are encoded in 4-byte words, with the MSB (most significant byte) stored at the smallest memory address ([big endian](https://en.wikipedia.org/wiki/Endianness)).
 
-| Starting Address | Length | Details               |
-| -- | -- |-----------------------|
-| `0x3C000` | 5 words | [Header](#header)     |
-| `0x3C014` | (4 words) x (number_of_entries) | [Entries](#entries)   |
-| `0x3C014 + (16 x number_of_entries)` | variable | [Raw data](#raw-data) |
+| Starting Address                     | Length                          | Details               |
+|--------------------------------------|---------------------------------|-----------------------|
+| `0x3C000`                            | 5 words                         | [Header](#header)     |
+| `0x3C014`                            | (4 words) x (number_of_entries) | [Entries](#entries)   |
+| `0x3C014 + (16 x number_of_entries)` | variable                        | [Raw data](#raw-data) |
 
 #### Header
 The header contains metadata information about the certificate section and entries. Each field is a 4-byte word.
 
-| Word | Value             | Details                                                                                                                                                                                                         |
-|------|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1    | Unknown           | 
-| 2    | Unknown           | 
-| 3    | Length            | Length of the certificate section, in *bytes*. This is relative to the start of the certificate section (at `0x3C000`), therefore the first 2 (unknown) words and this length field are included in the length. | 
-| 4    | Number of entries | Number of entries in the certificate section                                                                                                                                                                    |
-| 5    | Unknown           | Unknown. Set to `0x0`                                                                                                                                                                                           |
+| Word | Value             | Details                                                                                                                                                                                                       |
+|------|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1    | Magic             | Always: `0x0E0C0A08`                                                                                                                                                                                          |
+| 2    | Magic             | Always: `0x02040607`                                                                                                                                                                                          |
+| 3    | Length            | Length of the certificate section, in *bytes*. This is relative to the start of the certificate section (at `0x3C000`), therefore the first 2 (magic) words and this length field are included in the length. | 
+| 4    | Number of entries | Number of entries in the certificate section                                                                                                                                                                  |
+| 5    | Unknown           | Unknown. Set to `0x0`                                                                                                                                                                                         |
 
 #### Entries
 Entries contains metadata about the type of entry and where to locate the entry's raw data.

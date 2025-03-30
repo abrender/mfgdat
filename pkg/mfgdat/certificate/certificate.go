@@ -20,6 +20,8 @@ import (
 
 const (
 	certificateSectionOffset = -0x4000
+	magic1                   = 0x0E0C0A08
+	magic2                   = 0x02040607
 )
 
 // Parameters used for AES decryption of the client private key.
@@ -64,12 +66,13 @@ func (b *Bundle) parse(certificateSection []byte) error {
 		return binary.BigEndian.Uint32(certificateSection[byteReadIndex : byteReadIndex+4])
 	}
 
-	// Words 1 & 2 are not used.
-	_ = readWord()
-	_ = readWord()
+	// Verify the magic values.
+	if word1, word2 := readWord(), readWord(); word1 != magic1 || word2 != magic2 {
+		return fmt.Errorf("magic bytes did not match. Expected 0x%x and 0x%x, got 0x%x and 0x%x", magic1, magic2, word1, word2)
+	}
 
 	// Word 3 contains the total length (in bytes) of the certificate section.
-	// The value includes the first 2 (skipped) words and the length field itself.
+	// The value includes the first 2 (magic) words and the length field itself.
 	certificateSectionLen := int(readWord())
 	if certificateSectionLen > len(certificateSection) {
 		return fmt.Errorf("length (%d) out of range (certificate section is %d bytes)", certificateSectionLen, len(certificateSection))

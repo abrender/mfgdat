@@ -32,6 +32,13 @@ if [ ${ACTUAL_SIZE} -ne ${FILE_SIZE} ]; then
     exit 1
 fi
 
+# Verify the magic numbers are correct.
+MAGIC1=$(read_word 1)
+MAGIC2=$(read_word 2)
+if [[ ${MAGIC1} -ne $((0x0E0C0A08)) ]] || [[ ${MAGIC2} -ne $((0x02040607)) ]]; then
+  echo "Unknown magic numbers - expected 0x0E0C0A08 and 0x02040607"
+  exit 1
+fi
 
 NUMBER_OF_ENTRIES=$(read_word 4)
 if [[ ${NUMBER_OF_ENTRIES} -gt 10 ]] ; then
