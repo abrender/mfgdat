@@ -17,16 +17,16 @@ READ_WORD_SKIP_START=$(( CERT_STORE_START - 4)) # Subtract 4 because we start at
 read_word(){
   local WORD_NUM=$1
 
-  HEX_NUMBER=$(dd status=none if=${FILE} bs=1 count=4 skip=$((READ_WORD_SKIP_START + (4 * WORD_NUM))) | xxd -p)
+  HEX_NUMBER=$(dd status=none if="${FILE}" bs=1 count=4 skip=$((READ_WORD_SKIP_START + (4 * WORD_NUM))) | xxd -p)
   echo $((0x$HEX_NUMBER)) # Convert to decimal
 }
 
-if [ ! -r $FILE ]; then
+if [ ! -r "$FILE" ]; then
   echo "Cannot read file ${FILE}"
   exit 1
 fi
 
-ACTUAL_SIZE=$(cat $FILE | wc -c)
+ACTUAL_SIZE=$(cat "${FILE}" | wc -c)
 if [ ${ACTUAL_SIZE} -ne ${FILE_SIZE} ]; then
     echo "mfg.dat file is ${ACTUAL_SIZE} bytes, expected ${FILE_SIZE} bytes"
     exit 1
@@ -56,7 +56,7 @@ do
   if [[ ${ENTRY_TYPE} -eq 2 ]]; then
     echo "################## FOUND CLIENT CERTIFICATE ####################"
 
-    DEVICE_CERT_PEM=$(dd status=none if=${FILE} bs=1 count=${ENTRY_RAW_DATA_LENGTH} skip=$((RAW_DATA_START + ENTRY_RAW_DATA_OFFSET)) | openssl x509 -inform DER -outform PEM)
+    DEVICE_CERT_PEM=$(dd status=none if="${FILE}" bs=1 count=${ENTRY_RAW_DATA_LENGTH} skip=$((RAW_DATA_START + ENTRY_RAW_DATA_OFFSET)) | openssl x509 -inform DER -outform PEM)
     echo -n "Certificate Subject: "; echo "${DEVICE_CERT_PEM}" | openssl x509 -inform PEM -noout -subject;
     echo -n "Certificate Issuer:  "; echo "${DEVICE_CERT_PEM}" | openssl x509 -inform PEM -noout -issuer; echo
     echo "${DEVICE_CERT_PEM}"
@@ -66,8 +66,7 @@ do
   if [[ ${ENTRY_TYPE} -eq 3 ]]; then
     echo "################## FOUND CA CERTIFICATE ########################"
 
-    # dd status=none if=${FILE} bs=1 count=${ENTRY_RAW_DATA_LENGTH} skip=$((RAW_DATA_START + ENTRY_RAW_DATA_OFFSET)) | openssl x509 -inform DER -outform PEM
-    CA_PEM=$(dd status=none if=${FILE} bs=1 count=${ENTRY_RAW_DATA_LENGTH} skip=$((RAW_DATA_START + ENTRY_RAW_DATA_OFFSET)) | openssl x509 -inform DER -outform PEM)
+    CA_PEM=$(dd status=none if="${FILE}" bs=1 count=${ENTRY_RAW_DATA_LENGTH} skip=$((RAW_DATA_START + ENTRY_RAW_DATA_OFFSET)) | openssl x509 -inform DER -outform PEM)
     echo -n "Certificate Subject: "; echo "${CA_PEM}" | openssl x509 -inform PEM -noout -subject;
     echo -n "Certificate Issuer:  "; echo "${CA_PEM}" | openssl x509 -inform PEM -noout -issuer; echo
     echo "${CA_PEM}"
@@ -79,7 +78,7 @@ do
     # There are 2x 4-byte words before the encrypted key.
     PREAMBLE_LEN=2*4
 
-    dd status=none if=${FILE} bs=1 count=$((ENTRY_RAW_DATA_LENGTH - PREAMBLE_LEN)) skip=$((RAW_DATA_START + ENTRY_RAW_DATA_OFFSET + PREAMBLE_LEN)) | \
+    dd status=none if="${FILE}" bs=1 count=$((ENTRY_RAW_DATA_LENGTH - PREAMBLE_LEN)) skip=$((RAW_DATA_START + ENTRY_RAW_DATA_OFFSET + PREAMBLE_LEN)) | \
         openssl aes-128-cbc -d -K "8C02E49C55BAE56C4BE552B50B41D69F" -iv "2F79D4173A155E3BD079DE4C81719D3C" -nopad | openssl ec -inform DER -outform PEM
     echo
   fi
