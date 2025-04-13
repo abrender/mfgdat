@@ -91,3 +91,8 @@ Certificate [entries](#entries) point to raw data contained in this section.
 
 ## Credit
 Credit to rss (@rssor) and d (@slush0_) of 8311 for information about the private key decryption.
+
+## Resources
+- [extract_bgw_certs](https://github.com/rssor/extract_bgw_certs/) Python version authored by @rssor & @slush0_ from 8311.
+- [mfg_dat_decode](https://www.devicelocksmith.com/2018/12/eap-tls-credentials-decoder-for-nvg-and.html) the original closed-source implementation from devicelocksmith, with support for all but the BGW620-700
+- [0x888e/certs](https://github.com/0x888e/certs) software-only method to get the necessary files out of a BGW210 or BGW320
