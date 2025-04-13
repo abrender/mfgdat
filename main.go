@@ -10,6 +10,7 @@ package main
 
 import (
 	_ "embed"
+	"errors"
 
 	"archive/tar"
 	"bytes"
@@ -31,6 +32,8 @@ import (
 
 //go:embed wpa_supplicant.conf.template
 var wpaSupplicantTemplateText string
+
+var searchFilenames = []string{"mfg.dat", "calibration_01.bin"}
 
 // The root certificate used to sign the certificate presented by the ONT to the gateway.
 //
@@ -137,20 +140,22 @@ func writeTarGz(s *certificate.Bundle, w io.Writer, mtime time.Time) error {
 	return nil
 }
 
-// Run reads the mfg.dat file at `inputFilePath` and writes the output .tar.gz file into `outputDir`.
+// Run reads the file at `inputFilePath` and writes the output .tar.gz file into `outputDir`.
 // `mtime` is set as the modification time for the contents of the .tar.gz file. Passing a known inputFilePath and mtime
 // to this function will generate a deterministic output that can be compared to a golden file.
 func Run(inputFilePath string, outputDir string, mtime time.Time) error {
 	fmt.Printf("Reading input file: %s\n\n", inputFilePath)
-	mfgDatBytes, err := os.ReadFile(inputFilePath)
+	fileBytes, err := os.ReadFile(inputFilePath)
 	if err != nil {
 		return fmt.Errorf("could not read file %q: %v", inputFilePath, err)
 	}
 
 	var bundle *certificate.Bundle
-	if bundle, err = certificate.ParseMfgDat(mfgDatBytes); err != nil {
-		return fmt.Errorf("error parsing mfg.dat file: %v\n", err)
+	if bundle, err = certificate.ParseFile(fileBytes); err != nil {
+		return fmt.Errorf("error parsing input file: %v\n", err)
 	}
+
+	fmt.Printf("Found device model: %s\n", bundle.Model)
 
 	outputFileName := bundle.ClientCertificate.Subject.SerialNumber + ".tar.gz"
 	outputFilePath := outputFileName
@@ -180,14 +185,20 @@ func Run(inputFilePath string, outputDir string, mtime time.Time) error {
 
 func main() {
 	fmt.Println("Copyright (C) 2025 Avi Brender.")
-	fmt.Println("License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>")
+	fmt.Println("License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>")
 	fmt.Println()
 	fmt.Println("This is free software; you are free to change and redistribute it.")
 	fmt.Println("There is NO WARRANTY, to the extent permitted by law.")
 	fmt.Println()
 
 	if len(os.Args) == 1 {
-		os.Args = append(os.Args, "mfg.dat")
+		for _, filename := range searchFilenames {
+			if _, err := os.Stat(filename); errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			os.Args = append(os.Args, filename)
+			break
+		}
 	}
 
 	if len(os.Args) != 2 {

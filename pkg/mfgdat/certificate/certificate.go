@@ -1,4 +1,4 @@
-// Package certificate parses and exposes certificates and private keys from an mfg.dat file.
+// Package certificate parses and exposes certificates and private keys from BGW gateways.
 // Copyright (C) 2025 Avi Brender.
 //
 // This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
@@ -10,106 +10,72 @@
 package certificate
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
+	"bytes"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/binary"
 	"fmt"
+	"io"
+	"unsafe"
 )
 
 const (
-	certificateSectionOffset = -0x4000
-	magic1                   = 0x0E0C0A08
-	magic2                   = 0x02040607
+	// The magic bytes are used to identify the start of the certificate header in an mfg.dat/calibration_01.bin file.
+	// (https://en.wikipedia.org/wiki/List_of_file_signatures).
+	magic1 = 0x0E0C0A08
+	magic2 = 0x02040607
 )
 
-// Parameters used for AES decryption of the client private key.
-var aesKey = []byte{0x8C, 0x02, 0xE4, 0x9C, 0x55, 0xBA, 0xE5, 0x6C, 0x4B, 0xE5, 0x52, 0xB5, 0x0B, 0x41, 0xD6, 0x9F}
-var aesIV = []byte{0x2F, 0x79, 0xD4, 0x17, 0x3A, 0x15, 0x5E, 0x3B, 0xD0, 0x79, 0xDE, 0x4C, 0x81, 0x71, 0x9D, 0x3C}
+type header struct {
+	Magic1     uint32
+	Magic2     uint32
+	Len        uint32 // Length of the certificate section in bytes. This includes the header, entries and raw data.
+	NumEntries uint32
+	Unknown    uint32
+}
+
+type entry struct {
+	// Starting address for the entry's raw data. The offset is in *bytes* relative to the start of the raw data.
+	Offset uint32
+	Length uint32 // Length of the entry in *bytes*.
+	Type   entryT
+	Flags  uint32 // 1 = Encrypted. Currently unused because this is only set when Type=4.
+}
 
 // The 3rd word of each entry contains an integer representing the type of data stored in that entry. These are the
 // known values for this data.
 type entryT uint32
 
 const (
-	entryTypeClientCert         entryT = 2
-	entryTypeCACert             entryT = 3
-	entryTypeClientKeyEncrypted entryT = 4
+	entryTypeClientCert               entryT = 2
+	entryTypeCACert                   entryT = 3
+	entryTypeEncryptedPKCS8PrivateKey entryT = 4
 )
 
 // Bundle contains certificate & key entries from the certificate section of mfg.dat.
 type Bundle struct {
+	Model             string
 	ClientCertificate *x509.Certificate
 	ClientPrivateKey  *rsa.PrivateKey
 	CACertificates    []*x509.Certificate
 }
 
-func ParseMfgDat(mfgDat []byte) (*Bundle, error) {
+// ParseFile reads the input file bytes and returns a Bundle containing the client device certificate & key and the CA
+// certificates.
+func ParseFile(file []byte) (*Bundle, error) {
 	bundle := new(Bundle)
-
-	if err := bundle.parse(mfgDat[len(mfgDat)+certificateSectionOffset:]); err != nil {
-		return nil, fmt.Errorf("error parsing mfg.dat file at offset %Xh: %v", certificateSectionOffset, err)
+	if err := bundle.parseCertificatesAndKey(file); err != nil {
+		return nil, fmt.Errorf("error parsing the certificates and key: %v", err)
 	}
 
 	return bundle, nil
 }
 
-func (b *Bundle) parse(certificateSection []byte) error {
-	byteReadIndex := 0
-
-	// readWord function will panic when called too many times. There is no bounds checking of the slice indexes. This
-	// is to simplify the function signature such that error checking is not required. The scope of this function is
-	// limited to parse(), and it is only called a few times, therefore this trade-off is reasonable.
-	readWord := func() uint32 {
-		defer func() { byteReadIndex = byteReadIndex + 4 }()
-		return binary.BigEndian.Uint32(certificateSection[byteReadIndex : byteReadIndex+4])
+func (b *Bundle) parseCertificatesAndKey(file []byte) error {
+	entries, err := parseEntries(file)
+	if err != nil {
+		return fmt.Errorf("error parsing entries: %v", err)
 	}
-
-	// Verify the magic values.
-	if word1, word2 := readWord(), readWord(); word1 != magic1 || word2 != magic2 {
-		return fmt.Errorf("magic bytes did not match. Expected 0x%x and 0x%x, got 0x%x and 0x%x", magic1, magic2, word1, word2)
-	}
-
-	// Word 3 contains the total length (in bytes) of the certificate section.
-	// The value includes the first 2 (magic) words and the length field itself.
-	certificateSectionLen := int(readWord())
-	if certificateSectionLen > len(certificateSection) {
-		return fmt.Errorf("length (%d) out of range (certificate section is %d bytes)", certificateSectionLen, len(certificateSection))
-	}
-
-	// Word 4 contains the number of items (read: certificates & keys) in the certificate section.
-	entryCount := int(readWord())
-	if entryCount > 20 { // 20 is an arbitrary number. A real-world random BGW210 has 4 entries.
-		return fmt.Errorf("got suspiciously large certificate count: %d", entryCount)
-	}
-
-	// Word 5 is not used.
-	_ = readWord()
-
-	sizeOfEntryInBytes := 4 * 4 // Entries are composed of 4x 4-byte words.
-	rawData := certificateSection[(byteReadIndex + entryCount*(sizeOfEntryInBytes)):]
-
-	// Parse the entries.
-	entries := map[entryT][][]byte{}
-	for i := 1; i <= int(entryCount); i++ {
-		entryOffset := int(readWord())
-		entryLength := int(readWord())
-		entryType := entryT(readWord())
-		_ = readWord() // The 4th word in the entry is not currently used.
-
-		if (entryOffset + entryLength) > len(rawData) {
-			return fmt.Errorf("entry %d (offset=%d, length=%d) exceeds the length of the raw data (%d)", i, entryOffset, entryLength, len(rawData))
-		}
-
-		entries[entryType] = append(entries[entryType], rawData[entryOffset:entryOffset+entryLength])
-	}
-
-	return b.processEntries(entries)
-}
-
-func (b *Bundle) processEntries(entries map[entryT][][]byte) error {
-	var err error
 
 	// Process the client device certificate.
 	if count := len(entries[entryTypeClientCert]); count != 1 {
@@ -130,46 +96,24 @@ func (b *Bundle) processEntries(entries map[entryT][][]byte) error {
 	}
 
 	// Process the device private key.
-	if count := len(entries[entryTypeClientKeyEncrypted]); count != 1 {
+	if count := len(entries[entryTypeEncryptedPKCS8PrivateKey]); count != 1 {
 		return fmt.Errorf("expected exactly 1 private key, got %d", count)
 	}
-	privateKeyRawData := entries[entryTypeClientKeyEncrypted][0]
-	if val := binary.BigEndian.Uint32(privateKeyRawData[0 : 3*4]); val != 1 {
-		return fmt.Errorf("first word of the private key should be 1, found 0x%X", val)
-	}
 
-	// Strip off the first 2 words. They aren't part of the encrypted private key.
-	privateKeyRawData = privateKeyRawData[2*4:]
-
-	// Decrypt the private key bytes.
-	decryptedBytes, err := decryptPrivateKey(privateKeyRawData)
+	privateKeyRawData := entries[entryTypeEncryptedPKCS8PrivateKey][0]
+	privateKey, model, err := decryptPKCS8PrivateKey(privateKeyRawData)
 	if err != nil {
-		return fmt.Errorf("could not decrypt client key: %v", err)
-	}
-
-	// Parse the DER-formatted PKCS8 private key.
-	privateKeyAny, err := x509.ParsePKCS8PrivateKey(decryptedBytes)
-	if err != nil {
-		return fmt.Errorf("could not parse private PKCS8 key: %v", err)
-	}
-
-	// A type assertion is needed because x509.ParsePKCS8PrivateKey returns an `any` type.
-	privateKey, ok := privateKeyAny.(*rsa.PrivateKey)
-	if !ok {
-		return fmt.Errorf("private key is not an RSA key")
+		return fmt.Errorf("could not decrypt private key: %v", err)
 	}
 
 	if err := privateKey.Validate(); err != nil {
 		return fmt.Errorf("private key validation failed: %v", err)
 	}
 
+	b.Model = model.name
 	b.ClientPrivateKey = privateKey
 
-	if err := b.validateKeyPair(); err != nil {
-		return fmt.Errorf("public/private key pair validation failed; %v", err)
-	}
-
-	return nil
+	return b.validateKeyPair()
 }
 
 // validateKeyPair verifies that the public and private keys for the device are a matching pair.
@@ -186,19 +130,101 @@ func (b *Bundle) validateKeyPair() error {
 	return nil
 }
 
-// decryptPrivateKey decrypts the AES-128 encrypted device private key.
-func decryptPrivateKey(encrypted []byte) ([]byte, error) {
-	aesBlock, err := aes.NewCipher(aesKey)
+type entriesTable map[entryT][][]byte
+
+// parseEntries reads and returns the parsed entries from the input file bytes.
+func parseEntries(file []byte) (entriesTable, error) {
+	var header header
+	entries := make(entriesTable)
+
+	header, data, err := findCertificateSection(file)
 	if err != nil {
-		return nil, fmt.Errorf("could not create AES cipher: %v", err)
-	}
-	if len(encrypted)%aes.BlockSize != 0 {
-		return nil, fmt.Errorf("private key size (%d bytes) is not a multiple of the block size (%d)", len(encrypted), aes.BlockSize)
+		return nil, fmt.Errorf("error finding certificate section in file: %v", err)
 	}
 
-	// Decrypt the bytes.
-	decryptedBytes := make([]byte, len(encrypted))
-	cipher.NewCBCDecrypter(aesBlock, aesIV).CryptBlocks(decryptedBytes, encrypted)
+	// Basic sanity checks.
+	if totalLen := int(unsafe.Sizeof(header)) + len(data); int(header.Len) > totalLen {
+		return nil, fmt.Errorf("header size (%d bytes) exceeds the data length (%d bytes)", header.Len, totalLen)
+	}
+	if header.Len > (10 * (1024 * 1024)) {
+		return nil, fmt.Errorf("header size (%d bytes) is suspiciously large", header.Len)
+	}
+	if header.NumEntries > 10 {
+		return nil, fmt.Errorf("found suspiciously large number of entries: %d", header.NumEntries)
+	}
 
-	return decryptedBytes, nil
+	// note that use of `unsafe.Sizeof` is ... unsafe. Go will pad and align structs so we have to be careful about
+	// the order and type of fields we put in the `header` and `entry` structs.
+	// https://go101.org/article/memory-layout.html
+
+	sizeOfEntries := int64(header.NumEntries * uint32(unsafe.Sizeof(entry{})))
+	entriesReader := io.LimitReader(bytes.NewReader(data), sizeOfEntries)
+
+	sizeOfRawData := int64(int64(header.Len) - int64(sizeOfEntries) - int64(unsafe.Sizeof(header)))
+	rawDataReader := io.NewSectionReader(bytes.NewReader(data), sizeOfEntries, sizeOfRawData)
+
+	for i := 1; i <= int(header.NumEntries); i++ {
+		var entry entry
+		if err := binary.Read(entriesReader, binary.BigEndian, &entry); err != nil {
+			return nil, fmt.Errorf("error reading entry %d: %v", i, err)
+		}
+
+		if entry.Length > (1024 * 1024) {
+			return nil, fmt.Errorf("size of entry %d (%d bytes) is suspiciously large", i, entry.Length)
+		}
+
+		rawData := make([]byte, entry.Length)
+		if _, err := rawDataReader.ReadAt(rawData, int64(entry.Offset)); err != nil {
+			return nil, fmt.Errorf("error reading entry %d: %v", i, err)
+		}
+
+		entries[entry.Type] = append(entries[entry.Type], rawData)
+	}
+	return entries, nil
+}
+
+// findCertificateSection checks for the certificate section header at well-known offsets and returns the header and the
+// bytes *after* the header (including the entries and raw data).
+func findCertificateSection(file []byte) (header, []byte, error) {
+	reader := bytes.NewReader(file)
+
+	// The certificate section may be located at different parts of the file, so we search through some well-known
+	// offsets and attempt to locate the certificate section.
+	seeks := []struct {
+		offset int64
+		whence int
+	}{
+		{0, io.SeekStart},     // calibration_01.bin files start at offset 0 (the beginning of the file).
+		{-0x4000, io.SeekEnd}, // mfg.dat files start at -0x4000.
+	}
+
+	for _, seek := range seeks {
+		// Note: Errors are ignored within the loop because we always want to continue and try the next offset.
+		if _, err := reader.Seek(seek.offset, seek.whence); err != nil {
+			continue
+		}
+		var header header
+		if err := binary.Read(reader, binary.BigEndian, &header); err != nil {
+			continue
+		}
+		if header.Magic1 != magic1 || header.Magic2 != magic2 {
+			continue
+		}
+		data, err := io.ReadAll(reader)
+		return header, data, err
+	}
+
+	return header{}, nil, fmt.Errorf("no certificate section found at any known offset")
+}
+
+// decryptPKCS8PrivateKey decrypts the raw bytes and returns an RSA private key.
+func decryptPKCS8PrivateKey(encrypted []byte) (*rsa.PrivateKey, modelT, error) {
+	for _, model := range models {
+		privateKey, err := model.decryptPKCS8PrivateKey(encrypted)
+		if err == nil {
+			return privateKey, model, nil
+		}
+		// We proceed on errors because we want to check all the models before returning an error.
+	}
+	return nil, modelT{}, fmt.Errorf("could not decrypt encrypted data: no compatible model found")
 }

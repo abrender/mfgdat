@@ -31,6 +31,21 @@ func TestRun(t *testing.T) {
 			inputFile:  "testdata/bgw210-700/mfg.dat", // Fake file created using make-fake-mfg-dat-bgw210-700.sh
 			goldenFile: "testdata/bgw210-700/123ABC-P67AB2DR253311.tar.gz",
 		},
+		{
+			testName:   "bgw320-500",
+			inputFile:  "testdata/bgw320-500/calibration_01.bin",
+			goldenFile: "testdata/bgw320-500/123ABC-P67AB2DR253312.tar.gz",
+		},
+		{
+			testName:   "bgw320-505",
+			inputFile:  "testdata/bgw320-505/calibration_01.bin",
+			goldenFile: "testdata/bgw320-505/123ABC-P67AB2DR253313.tar.gz",
+		},
+		{
+			testName:   "bgw620-700",
+			inputFile:  "testdata/bgw620-700/calibration_01.bin",
+			goldenFile: "testdata/bgw620-700/123ABC-P67AB2DR253314.tar.gz",
+		},
 	}
 
 	for _, test := range tests {
