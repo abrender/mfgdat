@@ -40,6 +40,17 @@ var searchFilenames = []string{"mfg.dat", "calibration_01.bin"}
 //go:embed att-services-root-ca.pem
 var attServicesRootCA string
 
+// These variables can be updated at build time. Example usage:
+//
+//	LDFLAGS=
+//	LDFLAGS="$LDFLAGS -X 'main.BuildRelease=v0.0.1'"
+//	LDFLAGS="$LDFLAGS -X 'main.BuildRevision=$(git rev-parse --short HEAD)'"
+//	LDFLAGS="$LDFLAGS -X 'main.BuildTime=$(date)'"
+//	go build -ldflags "$LDFLAGS"
+var BuildRelease string = "unknown"
+var BuildRevision string = "unknown"
+var BuildTime string = "unknown"
+
 // writeTarGz writes a .tar.gz file to `w` containing a wpa_supplicant.conf file and related certificate and keys.
 func writeTarGz(s *certificate.Bundle, w io.Writer, mtime time.Time) error {
 	var buf bytes.Buffer // Used to temporarily store PEM-encoded data. Reset() must be called between uses.
@@ -189,6 +200,10 @@ func main() {
 	fmt.Println()
 	fmt.Println("This is free software; you are free to change and redistribute it.")
 	fmt.Println("There is NO WARRANTY, to the extent permitted by law.")
+	fmt.Println()
+	fmt.Printf("Build Release: %s\n", BuildRelease)
+	fmt.Printf("Build Revision: %s\n", BuildRevision)
+	fmt.Printf("Build Time: %s\n", BuildTime)
 	fmt.Println()
 
 	if len(os.Args) == 1 {

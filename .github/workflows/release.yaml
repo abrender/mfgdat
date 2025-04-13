@@ -27,7 +27,11 @@ jobs:
 
       - name: Build
         run: |
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o decoder-${{ matrix.goos }}-${{ matrix.goarch }}${{ (matrix.goos == 'windows') && '.exe' || '' }} .
+          LDFLAGS=
+          LDFLAGS="$LDFLAGS -X 'main.BuildRelease=${{ github.event.release.tag_name }}'"
+          LDFLAGS="$LDFLAGS -X 'main.BuildRevision=$(git rev-parse --short HEAD)'"
+          LDFLAGS="$LDFLAGS -X 'main.BuildTime=$(date)'"
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags "$LDFLAGS" -o decoder-${{ matrix.goos }}-${{ matrix.goarch }}${{ (matrix.goos == 'windows') && '.exe' || '' }} .
 
       - name: Archive
         run: |
